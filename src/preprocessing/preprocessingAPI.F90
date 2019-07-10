@@ -1472,7 +1472,7 @@ contains
     ! The final familyExchange structure.
     allocate(BCFamExchange(nFamExchange, nTimeIntervalsSpectral), localFlag(totalFamilies))
 
-    BCGroupLoop: do iBCGroup=1, nfamExchange
+    BCGroupLoop: do iBCGroup=1, nFamExchange
        localFlag = 0
        ! Determine which of the unique families match the specific
        ! BCGroup.  This is slightly inefficient but not it isn't
@@ -1582,9 +1582,9 @@ contains
           case (iBCGroupWalls)
              write(*,"(a)",advance="no") '| Wall Types           : '
           case (iBCGroupInflow)
-             write(*,"(a)",advance="no") '| Inflow Types : '
+             write(*,"(a)",advance="no") '| Inflow Types         : '
           case (iBCGroupOutflow)
-             write(*,"(a)",advance="no") '| Outflow Types : '
+             write(*,"(a)",advance="no") '| Outflow Types        : '
           case (iBCGroupSymm)
              write(*,"(a)",advance="no") '| Symmetry Types       : '
           case (iBCGroupFarfield)

@@ -28,3 +28,4 @@ python/reg_tests/adflow_test*_reg
 python/reg_tests/adflow_reg.ref
 python/reg_tests/adflow_reg
 src/build/importTest.py
+tags
