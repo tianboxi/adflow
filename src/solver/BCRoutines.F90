@@ -154,7 +154,7 @@ end subroutine applyAllBC
     do nn=1,nBocos
        if (BCType(nn) == farField) then
           call setBCPointers(nn, .False.)
-          call bcFarField(nn, secondHalo, correctForK)
+          call bcFarfield(nn, secondHalo, correctForK)
        end if
     end do
 
@@ -165,7 +165,7 @@ end subroutine applyAllBC
        if (BCType(nn) == subSonicOutFlow .or. &
             BCType(nn) == MassBleedOutflow) then
           call setBCPointers(nn, .False.)
-          call bcSubSonicOutFlow(nn, secondHalo, correctForK)
+          call bcSubsonicOutflow(nn, secondHalo, correctForK)
        end if
     end do
 
@@ -175,7 +175,7 @@ end subroutine applyAllBC
     do nn=1,nBocos
        if (BCType(nn) == subSonicInFlow) then
           call setBCPointers(nn, .False.)
-          call bcSubSonicInflow(nn, secondHalo, correctForK)
+          call bcSubsonicInflow(nn, secondHalo, correctForK)
        end if
     end do
 

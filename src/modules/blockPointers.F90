@@ -9,7 +9,7 @@ module blockPointers
   !       See the module block for the meaning of the variables.
   !       Note that the dimensions are not pointers, but integers.
   !       Consequently changing dimensions of a block must be done only
-  !       with the variables of floDoms.
+  !       with the variables of flowDoms.
   !
   use constants, only : intType, realType, porType
   use block, only : fringeType, BCDataType, viscSubFaceType, flowDoms, nDom

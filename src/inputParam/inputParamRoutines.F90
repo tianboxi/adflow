@@ -760,7 +760,7 @@ contains
 
   end subroutine defaultVolumeOut
 
-  subroutine dummyreadParamFile
+  subroutine dummyReadParamFile
     !
     !       This subroutine is the same as readParamFile EXCEPT it does not
     !       read the actual file. Values are set diectly from python for

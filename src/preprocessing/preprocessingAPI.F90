@@ -156,7 +156,7 @@ contains
     ! Done for all grid levels.
 
     call cellRangeSubface
-    call initBcdata
+    call initBCData
 
     ! Allocate some data of size nLevels for the fast wall distance calc
     allocate(xVolumeVec(nLevels), xSurfVec(nLevels, mm), wallScatter(nLevels, mm), &

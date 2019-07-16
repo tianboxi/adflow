@@ -163,7 +163,7 @@ contains
                    coor(1:3) = xCen
                    coor(4) = dStar
                    intInfo(3) = 0
-                   call minDistancetreeSearchSinglePoint(ADT, coor, intInfo, &
+                   call minDistanceTreeSearchSinglePoint(ADT, coor, intInfo, &
                         uvw, dummy, 0, BB, frontLeaves, frontLeavesNew)
                    cellID = intInfo(3)
                    if (cellID > 0) then

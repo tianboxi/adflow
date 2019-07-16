@@ -319,7 +319,7 @@ end subroutine infChangeCorrection
     ! As some boundary conditions can be treated in multiple ways,
     ! some memory allocated must be released again.
 
-     call releaseExtraMemBcs
+     call releaseExtraMemBCs
 
     ! Determine for the time spectral mode the matrices for the
     ! time derivatives.

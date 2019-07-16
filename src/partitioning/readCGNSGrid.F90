@@ -1965,7 +1965,6 @@ contains
             cgnsDoms(nZone)%bocoInfo(i)%normalListFlag, &
             cgnsDoms(nZone)%bocoInfo(i)%normalDataType, &
             cgnsNDataSet, ierr)
-
        if(ierr /= CG_OK)           &
             call terminate("readBocos", &
             "Something wrong when calling cg_boco_info_f")
