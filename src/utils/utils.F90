@@ -1693,6 +1693,88 @@ module utils
     myNorm2 = sqrt(x(1)**2 + x(2)**2 + x(3)**2)
   end function myNorm2
 
+  subroutine myCrossP(x,y,z)
+    !  function that compute cross product of two vectors
+    use constants
+    use precision
+    implicit none
+    real(kind=realType), dimension(3), intent(in) :: x, y
+    real(kind=realType), dimension(3), intent(out) :: z
+
+    z(1) = (x(2)*y(3) - x(3)*y(2))
+    z(2) = (x(3)*y(1) - x(1)*y(3))
+    z(3) = (x(1)*y(2) - x(2)*y(1))
+    z = z / sqrt(z(1)**2 + z(2)**2 + z(3)**2)
+   
+  end subroutine myCrossP
+
+  subroutine convertCoordToCyl(x, xcyl) 
+    ! function that converts a cartesian coordinate to cylindrical
+    ! along x-axis
+    use constants
+    use precision
+
+    implicit none
+    real(kind=realType), dimension(3), intent(in) :: x
+    real(kind=realType), dimension(3), intent(out) :: xcyl
+
+    xcyl(1) = sqrt(x(2)**2 + x(3)**2)
+    if (x(3) >= 0) then
+       xcyl(2) = acos(x(2)/xcyl(1))
+    else 
+       xcyl(2) = 2*pi - acos(x(2)/xcyl(1))
+    end if
+    xcyl(3) = x(1)
+
+  end subroutine
+
+  subroutine convertVecToCyl(x, t, xcyl) 
+    ! function that converts a vector from cartesian to cylindrical
+    ! rotation along x-axis
+    use constants
+    use precision
+    implicit none
+    real(kind=realType), dimension(3), intent(in) :: x
+    real(kind=realType), intent(in) :: t
+    real(kind=realType), dimension(3), intent(out) :: xcyl
+
+    xcyl(1) = cos(t) * x(2) + sin(t) * x(3)
+    xcyl(2) = -1*sin(t) * x(2) + cos(t) * x(3)
+    xcyl(3) = x(1)
+
+  end subroutine
+
+  subroutine convertCoordToCart(x, xcart) 
+    ! function that converts a cylindrical coordinate to cartesian
+    ! along x-axis
+    use constants
+    use precision
+    implicit none
+    real(kind=realType), dimension(3), intent(in) :: x
+    real(kind=realType), dimension(3), intent(out) :: xcart
+
+    xcart(2) = x(1) * cos(x(2))
+    xcart(3) = x(1) * sin(x(2))
+    xcart(1) = x(3)
+
+  end subroutine
+
+  subroutine convertVecToCart(x, t, xcart) 
+    ! function that converts a cylindrical vector to cartesian
+    ! along x-axis
+    use constants
+    use precision
+    implicit none
+    real(kind=realType), dimension(3), intent(in) :: x
+    real(kind=realType), intent(in) :: t
+    real(kind=realType), dimension(3), intent(out) :: xcart
+
+    xcart(2) = x(1) * cos(t) - x(2) * sin(t)
+    xcart(3) = x(1) * sin(t) + x(2) * cos(t)
+    xcart(1) = x(3)
+
+  end subroutine
+
   function isWallType(bType)
 
     use constants

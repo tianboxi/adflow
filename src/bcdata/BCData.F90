@@ -32,8 +32,8 @@ contains
        nbcVar = nbcVar + nwt
     end if
 
-    bcVarNames(1)  = cgnsPtot
-    bcVarNames(2)  = cgnsTtot
+    bcVarNames(1)  = cgnsPTot
+    bcVarNames(2)  = cgnsTTot
     bcVarNames(3)  = cgnsRhotot
     bcVarNames(4)  = cgnsVelAnglex
     bcVarNames(5)  = cgnsVelAngley

@@ -54,9 +54,13 @@ contains
     ! Set the reference values. They *COULD* be different from the
     ! free-stream values for an internal flow simulation. For now,
     ! we just use the actual free stream values.
-    pref = PInfDim
-    tref = TInfDim
-    rhoref = rhoInfDim
+    !pref = PInfDim
+    !tref = TInfDim
+    !rhoref = rhoInfDim
+    ! Set ref to 1.0, so that everything is dimensional \\T.Xie
+    pref = 1.0_realType
+    tref = 1.0_realType
+    rhoref = 1.0_realType
 
     ! Compute the value of muRef, such that the nonDimensional
     ! equations are identical to the dimensional ones.

@@ -32,7 +32,7 @@ contains
 
           call setPointers(nn, currentLevel, sps)
 
-          call timeStep_Block(onlyRadii)
+          call timeStep_block(onlyRadii)
 
        end do domains
 

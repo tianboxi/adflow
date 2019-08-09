@@ -25,8 +25,10 @@ v. 1.0  - Original pyAero Framework Implementation (RP,SM 2008)
 # =============================================================================
 import os
 import time
+import csv
 import copy
 import numpy
+import math
 import sys
 from mpi4py import MPI
 from petsc4py import PETSc
@@ -34,6 +36,8 @@ from baseclasses import AeroSolver, AeroProblem, getPy3SafeString
 from . import MExt
 from pprint import pprint as pp
 import hashlib
+from scipy import interpolate
+from math import sqrt
 try:
     from collections import OrderedDict
 except ImportError:
@@ -614,6 +618,47 @@ class ADFLOW(AeroSolver):
         self.adflow.usersurfaceintegrations.addintegrationsurface(
             pts.T, conn.T, familyName, famID, isInflow)
 
+    
+    def addFanRegion(self, fileName, familyName, omega, B):
+
+        """Add a 3D bodyforce field based on supplied shape of camber
+        surface defined by a few camberlines contained in a CVS file.
+       
+        Parameters
+        ----------
+  
+        fileName : str
+           CSV file contains camberline coordinates
+        
+        omega : real number (rpm)
+           Fan rotational speed
+         
+        B : real number 
+           number of blades in current fan
+
+        """
+        # create a surface grid for the blade camber surface
+        conn, pts, normals = self._createCamberSurface(fileName)
+
+        nconn = conn.shape[1]
+        npts = pts.shape[1]
+
+        maxInd = 0
+        for fam in self.families:
+            if len(self.families[fam]) > 0:
+                maxInd = max(maxInd, numpy.max(self.families[fam]))
+        famID = maxInd + 1
+        self.families[familyName.lower()] = [famID]
+        relaxStart = -1.0
+        relaxEnd = -1.0
+
+
+        self.adflow.fanregion.addfanregion(
+            pts, conn, normals, omega, B, familyName, famID, 
+            relaxStart, relaxEnd, npts, nconn)
+        #self.adflow.fanregion.writefanregions('fanregion.vtk')
+
+        
     def addActuatorRegion(self, fileName, axis1, axis2, familyName,
                           thrust=0.0, torque=0.0, relaxStart=None,
                           relaxEnd=None):
@@ -692,6 +737,7 @@ class ADFLOW(AeroSolver):
         self.adflow.actuatorregion.addactuatorregion(
             pts.T, conn.T, axis1, axis2, familyName, famID, thrust, torque,
             relaxStart, relaxEnd)
+        self.adflow.actuatorregion.writeactuatorregions('actregion.dat')
 
 
     def addUserFunction(self, funcName, functions, callBack):
@@ -5217,6 +5263,224 @@ class ADFLOW(AeroSolver):
         slave.isSlave = True
         return slave
 
+    def _createCamberSurface(self, fileName):
+        """ create a camber surface from several camber lines """
+        # number of camber lines and number of points per camberline to read
+        nsecf = int(self._readCSV(fileName,0,0,0))
+        nptsf = int(self._readCSV(fileName,1,0,0))
+        X = self._readCSV(fileName,0,1,None)
+        R = self._readCSV(fileName,1,1,None)
+        T = self._readCSV(fileName,2,1,None)
+        X = numpy.reshape(X,(nptsf,nsecf),order='F')
+        R = numpy.reshape(R,(nptsf,nsecf),order='F')
+        T = numpy.reshape(T,(nptsf,nsecf),order='F')
+        Y = R * numpy.cos(T)
+        Z = R * numpy.sin(T)
+        # metrics for the interpolated surface grid
+        nsec, npts, ntan = 80, 50, 300 
+        # perform spline interpolation for the camber surface
+        npts_tot = nsec*npts
+        # interpolation within each camberline
+        Xtmp, Ytmp, Ztmp = numpy.empty([npts, nsecf]), numpy.empty([npts, nsecf]), numpy.empty([npts, nsecf]) 
+        for i in range(nsecf):
+             tck, u =interpolate.splprep([X[:,i],Y[:,i],Z[:,i]], s=0)  
+             unew = numpy.linspace(0,1,npts)
+             out = interpolate.splev(unew,tck)
+             out = numpy.asarray(out)
+             Xtmp[:,i], Ytmp[:,i], Ztmp[:,i] = out[0,:], out[1,:], out[2,:]
+        # interpolation in between each camber line
+        X, Y, Z = numpy.empty([npts, nsec]), numpy.empty([npts, nsec]), numpy.empty([npts, nsec])
+        for i in range(npts):
+             tck, u =interpolate.splprep([Xtmp[i,:],Ytmp[i,:],Ztmp[i,:]], s=0)
+             unew = numpy.linspace(0,1,nsec)
+             out = interpolate.splev(unew,tck)
+             out = numpy.asarray(out)
+             X[i,:], Y[i,:], Z[i,:] = out[0,:], out[1,:], out[2,:]
+        # create point and index array
+        count = 0
+        ind = numpy.empty([npts,nsec],dtype=int)
+        pts = numpy.empty([3,npts_tot])
+        for j in range(nsec):
+          for i in range(npts):
+            ind[i,j] = count
+            pts[0,ind[i,j]] = X[i,j]
+            pts[1,ind[i,j]] = Y[i,j]
+            pts[2,ind[i,j]] = Z[i,j]
+            count = count + 1
+        # create connectivity
+        ncell = (npts-1)*(nsec-1)
+        conn = numpy.empty([4, ncell],dtype=int)
+        ll = 0
+        for j in range(nsec-1):
+          for i in range(npts-1):
+            conn[0, ll], conn[1, ll], conn[2, ll], conn[3, ll] = ind[i,j], ind[i+1,j], ind[i+1,j+1], ind[i,j+1]
+            ll = ll + 1
+        # compute surface normal at nodes
+        normals, normalcount, sss = numpy.zeros((3, npts_tot)), numpy.zeros((npts_tot), dtype=int), numpy.empty([3])
+        for i in range(ncell):
+          v1 = pts[:, conn[2,i]] - pts[:, conn[0,i]]
+          v2 = pts[:, conn[3,i]] - pts[:, conn[1,i]]
+          # cross product
+          sss[0] = (v1[1]*v2[2] - v1[2]*v2[1])
+          sss[1] = (v1[2]*v2[0] - v1[0]*v2[2])
+          sss[2] = (v1[0]*v2[1] - v1[1]*v2[0])
+          sss = sss / sqrt(sss[0]**2 + sss[1]**2 + sss[2]**2)
+          for j in range(4):
+            normals[:, conn[j,i]] = normals[:, conn[j,i]] + sss
+            normalcount[conn[j,i]] = normalcount[conn[j,i]] + 1
+        for i in range(3):
+          normals[i,:] = normals[i,:]/normalcount
+        # write cambere surface into a VTK file for verification
+        self._writeVTK(pts, conn, 'camber.vtk', 'surface', [[normals,'Normals']])
+
+        # Project blade surface on to the axisymmetrical plane
+        R = numpy.sqrt(numpy.power(Z,2) + numpy.power(Y,2))
+        # Revolve 2D grid to form a volume grid
+        T = math.pi*2*numpy.linspace(0,1,ntan+1)
+        Xvol,Yvol,Zvol = numpy.empty([npts,nsec,ntan]), numpy.empty([npts,nsec,ntan]),\
+                     numpy.empty([npts,nsec,ntan])
+        volnormals = numpy.empty([npts,nsec,ntan,3])
+        for k in range(ntan):
+          for j in range(nsec):
+            for i in range(npts):
+              Yvol[i,j,k] = R[i,j]*numpy.cos(T[k])
+              Zvol[i,j,k] = R[i,j]*numpy.sin(T[k])
+              Xvol[i,j,k] = X[i,j]
+              # Rotate normal directions
+              volnormals[i,j,k,1] = normals[1,ind[i,j]]*numpy.cos(T[k])+normals[2,ind[i,j]]*-1*numpy.sin(T[k])
+              volnormals[i,j,k,2] = normals[1,ind[i,j]]*numpy.sin(T[k])+normals[2,ind[i,j]]*numpy.cos(T[k])
+              volnormals[i,j,k,0] = normals[0,ind[i,j]]
+        # create point and index array
+        npts_tot = ntan*nsec*npts
+        volpts, ind = numpy.empty([3, npts_tot]), numpy.empty([npts, nsec, ntan], dtype=int)
+        normalout = numpy.empty([3, npts_tot])
+        count = 0
+        for k in range(ntan):
+          for j in range(nsec):
+            for i in range(npts):
+              volpts[0, count] = Xvol[i,j,k]
+              volpts[1, count] = Yvol[i,j,k]
+              volpts[2, count] = Zvol[i,j,k]
+              normalout[:, count] = volnormals[i,j,k,:]
+              ind[i,j,k] = count
+              count = count + 1
+        # create connectivity
+        ncell = (npts-1)*(nsec-1)*ntan
+        volconn = numpy.empty([8, ncell], dtype=int)
+        ll = 0
+        for k in range(ntan):
+          for j in range(nsec-1):
+            for i in range(npts-1):
+              volconn[0,ll] = ind[i,j,k]
+              volconn[1,ll] = ind[i+1,j,k]
+              volconn[2,ll] = ind[i+1,j+1,k]
+              volconn[3,ll] = ind[i,j+1,k]
+              if k == ntan-1:
+                volconn[4,ll] = ind[i,j,0] 
+                volconn[5,ll] = ind[i+1,j,0] 
+                volconn[6,ll] = ind[i+1,j+1,0]
+                volconn[7,ll] = ind[i,j+1,0] 
+              else:
+                volconn[4,ll] = ind[i,j,k+1] 
+                volconn[5,ll] = ind[i+1,j,k+1] 
+                volconn[6,ll] = ind[i+1,j+1,k+1] 
+                volconn[7,ll] = ind[i,j+1,k+1]
+              ll = ll+1
+        # Write volume VTK file for verification
+        self._writeVTK(volpts, volconn, 'volume.vtk', 'volume', [[normalout, 'Normals']])
+
+        return volconn, volpts, normalout
+
+    def _writeVTK(self, pts, conn, name,datatype='surface',datalist=None):
+        if datatype =='surface':
+            ntotal = pts.shape[1]
+            ncell = conn.shape[1]
+            outputfile = open(name,'w')
+            outputfile.write("# vtk DataFile Version 3.0\n")
+            outputfile.write(name)
+            outputfile.write("\nASCII\n")
+            outputfile.write("DATASET UNSTRUCTURED_GRID\n")
+            outputfile.write("POINTS %i double\n" % ntotal)
+            for j in range(ntotal):
+              outputfile.write("%f %f %f\n" % (pts[0,j], pts[1,j], pts[2,j]))
+            outputfile.write("CELLS %i %i\n" % (ncell, (ncell*5)))
+            for j in range(ncell):
+              outputfile.write("%i %i %i %i %i\n" % (4, conn[0,j], conn[1,j], conn[2,j], conn[3,j]))
+            outputfile.write("CELL_TYPES %i\n" % ncell)
+            for i in range(ncell):
+              outputfile.write("%i\n" % 9)
+        elif datatype =='volume':
+            ntotal = pts.shape[1]
+            ncell = conn.shape[1]
+            outputfile = open(name,'w')
+            outputfile.write("# vtk DataFile Version 3.0\n")
+            outputfile.write(name)
+            outputfile.write("\nASCII\n")
+            outputfile.write("DATASET UNSTRUCTURED_GRID\n")
+            outputfile.write("POINTS %i double\n" % ntotal)
+            for i in range(ntotal):
+              outputfile.write("%f %f %f\n" % (pts[0,i], pts[1,i], pts[2,i]))
+            outputfile.write("CELLS %i %i\n" % (ncell, (ncell*9)))
+            for i in range(ncell):
+              outputfile.write("%i " % (8))
+              for j in range(8):
+                outputfile.write("%i " % (conn[j,i]))
+              outputfile.write("\n")
+            outputfile.write("CELL_TYPES %i\n" % ncell)
+            for i in range(ncell):
+              outputfile.write("%i\n" % 12)
+        if datalist:
+          outputfile.write('POINT_DATA %i\n' % (ntotal))
+          ndata = len(datalist)
+          for n in range(ndata):
+            if len(datalist[n][0].shape) == 1: # Scalar data
+              entry = datalist[n][0]
+              name = datalist[n][1]
+              outputfile.write('SCALARS ')
+              outputfile.write(name)
+              outputfile.write(' double 1\nLOOKUP_TABLE default\n')
+              for i in range(ntotal):
+                outputfile.write("%f \t" % (entry[i]))
+            elif len(datalist[n][0].shape) == 2: # Vector data
+              entry = datalist[n][0]
+              name = datalist[n][1]
+              outputfile.write('VECTORS ')
+              outputfile.write(name)
+              outputfile.write(' double\n')
+              for i in range(ntotal):
+                for l in range(3):
+                  outputfile.write('%f ' % (entry[l,i]))
+                outputfile.write('\n')
+        outputfile.close()
+
+    def _readCSV(self,fileName,col,fromrow,utlrow):
+        """ read a specific column from a CSV file for a range of rows, index start from 0""" 
+        if utlrow is None:
+            utlrow = -1
+            data = numpy.empty([0])
+        elif utlrow-fromrow>1:
+            data = numpy.empty([0])
+            array = 1
+        else:
+            data = 0.0
+            array = 0
+        with open(fileName) as csvfile:
+            reader = csv.reader(csvfile, delimiter=',')
+            rowcount = 0 
+            for row in reader:
+                if rowcount>=fromrow and row[col]:
+                    if utlrow==-1:
+                        data = numpy.append(data, float(row[col]))
+                    else:
+                        if rowcount>utlrow:
+                            break
+                        elif array:
+                            data = numpy.append(data, float(row[col]))
+                        else:
+                            data = float(row[col])
+                rowcount = rowcount + 1
+        return data
+
     def _readPlot3DSurfFile(self, fileName, convertToTris=True):
         """Read a plot3d file and return the points and connectivity in
         an unstructured mesh format"""
@@ -5286,7 +5550,6 @@ class ADFLOW(AeroSolver):
         conn = self.comm.bcast(conn)
 
         return pts, conn
-
 
 class adflowFlowCase(object):
     """

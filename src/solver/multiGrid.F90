@@ -850,7 +850,7 @@ contains
 
     ! Loop over the number of steps in cycling.
 
-    mgLoop: do nn=1,nstepsCycling
+    mgLoop: do nn=1,nStepsCycling
 
        ! Determine what must be done.
 

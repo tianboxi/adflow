@@ -381,6 +381,149 @@ contains
 
   end subroutine sourceTerms_block
 
+  subroutine fanSourceTerms_block(nn, res, iRegion, pLocal)
+
+    ! Apply the source terms for the given block. Assume that the
+    ! block pointers are already set.
+    use constants
+    use fanRegionData
+    use blockPointers, only : volRef, dw, w, x
+    use flowVarRefState, only : Pref, uRef
+    use communication
+    use iteration, only : ordersConverged
+    use utils, only: convertCoordToCyl, convertVecToCyl, convertCoordToCart, convertVecToCart, myCrossP
+    implicit none
+
+    ! Input
+    integer(kind=intType), intent(in) ::  nn, iRegion
+    logical, intent(in) :: res
+    real(kind=realType), intent(inout) :: pLocal
+
+    ! Working
+    integer(kind=intType) :: i, j, k, ii, iStart, iEnd, iDim
+    real(kind=realType) :: Omega, B, reDim, factor, oStart, oEnd
+    real(kind=realType) :: coord(3), coordcyl(3), normal(3) 
+    real(kind=realType) :: V(3), Vcyl(3), Wvec(3), Wcyl(3), Fact(3), Wmag, Wnmag, Wn(3), delta
+    real(kind=realType) :: Fmag, Ftmp(3), normalcyl(3), Wt(3), tmp(3)
+
+    reDim = pRef*uRef
+
+    ! Compute the relaxation factor based on the ordersConverged
+
+    ! How far we are into the ramp:
+    if (ordersConverged < fanRegions(iRegion)%relaxStart) then
+       factor = zero
+    else if (ordersConverged > fanRegions(iRegion)%relaxEnd) then
+       factor = one
+    else ! In between
+       oStart = fanRegions(iRegion)%relaxStart 
+       oEnd   = fanRegions(iRegion)%relaxEnd
+       factor = (ordersConverged - oStart)/(oEnd - oStart)
+    end if
+
+    ! Compute the constant force factor
+    !fact = factor*actuatorRegions(iRegion)%F / actuatorRegions(iRegion)%volume / pRef
+    Fact(1) = 1.0
+    Fact(2) = 0.0
+    Fact(3) = 0.0
+
+    Fact = Fact/fanRegions(iRegion)%volume/pRef
+
+    ! Loop over the ranges for this block
+    iStart = fanRegions(iRegion)%blkPtr(nn-1) + 1
+    iEnd =  fanRegions(iRegion)%blkPtr(nn)
+    
+    ! Some information about the fan
+    Omega  = fanRegions(iRegion)%Omega
+    B = fanRegions(iRegion)%B
+    ! Convert rpm to rad/s
+
+    Omega = Omega*2*pi/60.0
+
+    !$AD II-LOOP
+    do ii=iStart, iEnd
+       
+       ! Extract the cell ID.
+       i = fanRegions(iRegion)%cellIDs(1, ii)
+       j = fanRegions(iRegion)%cellIDs(2, ii)
+       k = fanRegions(iRegion)%cellIDs(3, ii)
+
+       ! Get blade region info of this cell
+       normal = fanRegions(iRegion)%normals(:, ii)
+              
+
+       ! Compute the cell center
+       coord = eighth*(x(i-1,j-1,k-1,:) + x(i,j-1,k-1,:)  &
+             +         x(i-1,j,  k-1,:) + x(i,j,  k-1,:)  &
+             +         x(i-1,j-1,k,  :) + x(i,j-1,k,  :)  &
+             +         x(i-1,j,  k,  :) + x(i,j,  k,  :))
+
+       ! Get velocities
+       V(1) = w(i, j, k, iVx)
+       V(2) = w(i, j, k, iVy)
+       V(3) = w(i, j, k, iVz)
+
+       ! Velocities in cylindrical coordinate
+       call convertCoordToCyl(coord, coordcyl)
+       call convertVecToCyl(V, coordcyl(2), Vcyl)
+       call convertVecToCyl(normal, coordcyl(2), normalcyl) 
+
+       ! Get velocities in relative frame
+       Wcyl(1) = Vcyl(1)
+       Wcyl(2) = Vcyl(2) + Omega*coordcyl(1)
+       Wcyl(3) = Vcyl(3)
+
+       call convertVecToCart(Wcyl, coordcyl(2), Wvec)
+
+       fanRegions(iRegion)%W(:, ii) = Wvec
+
+       Wmag = sqrt(Wvec(1)**2 + Wvec(2)**2 + Wvec(3)**2)
+
+       ! compute relative flow component normal to the blade
+       Wnmag = Wvec(1)*normal(1) + Wvec(2)*normal(2) + Wvec(3)*normal(3)
+       do iDim=1, 3
+          Wn(iDim) = Wnmag * normal(iDim)
+       end do
+       
+       ! compute relative flow tengential to the flow
+       Wt = Wvec - Wn
+       fanRegions(iRegion)%Wt(:, ii) = Wt
+
+       ! compute relative flow angle from the blade tengential 
+       delta = asin(abs(Wnmag)/Wmag)
+       
+       ! compute force magnitude
+       Fmag = (2*pi*delta)*(0.5*Wmag**2/normalcyl(2))/(2*pi*coordcyl(1)/B)
+       
+       ! compute Wt cross normal
+       call myCrossP(Wt, normal, tmp)
+
+       ! compute (Wt cross normal) cross W
+       call myCrossP(tmp, Wvec, Ftmp)
+
+       ! compute the actual force vector
+       Ftmp = -1 * Fmag * Ftmp * volRef(i,j,k)/pRef
+
+       fanRegions(iRegion)%F(:, ii) = Ftmp
+
+       ! Use unitform force vector for debug purpose
+       Ftmp = volRef(i, j, k) * Fact
+
+       if (res) then
+          ! Momentum residuals
+          dw(i, j, k, imx:imz) = dw(i, j, k, imx:imz) - Ftmp
+
+          ! energy residuals
+          dw(i, j, k, iRhoE) = dw(i, j, k, iRhoE)  - &
+               Ftmp(1)*V(1) - Ftmp(2)*V(2) - Ftmp(3)*V(3)
+       else
+          ! Add in the local power contribution:
+          pLocal = pLocal + (V(1)*Ftmp(1) + V(2)*FTmp(2) + V(3)*Ftmp(3))*reDim
+       end if
+    end do
+
+  end subroutine fanSourceTerms_block
+
 
   ! ----------------------------------------------------------------------
   !                                                                      |
@@ -966,6 +1109,8 @@ contains
     use blockPointers
     use utils, only : setPointers
     use actuatorRegionData
+    use fanRegionData
+    use fanRegion, only : writeFanRegions
     implicit none
 
     integer(kind=intType) :: nn, iRegion
@@ -976,10 +1121,24 @@ contains
 
        ! Set the pointers for this block.
        call setPointers(nn, 1, 1)
+
        do iRegion=1, nActuatorRegions
+
           call sourceTerms_block(nn, .True., iRegion, dummy)
+
+       end do
+       
+       do iRegion=1, nFanRegions
+
+          call fanSourceTerms_block(nn, .True., iRegion, dummy)
+
+          ! Uncomment the following line to write a vtk file of the
+          ! source volume with bodyforces
+          !call writeFanRegions('fanregion.vtk')
+
        end do
     end do domains
+
 
   end subroutine sourceTerms
 

@@ -449,6 +449,21 @@ python module libadflow
 
        end module usersurfaceintegrations
 
+       module fanregion ! in :test:fanRegion.F90
+         subroutine addfanregion(pts,conn, normals, omega, b, famname, famid, relaxstart, relaxend,npts,nconn) ! in :test:fanRegion.F90:fanregion
+            real(kind=realtype), dimension(3, npts), intent(in), target :: pts
+            integer(kind=inttype), dimension(8, nconn), intent(in), target :: conn
+            real(kind=realtype), dimension(3, npts), intent(in), target :: normals
+            integer(kind=inttype), intent(in) :: npts, nconn, famid
+            real(kind=realtype),intent(in) :: omega, b, relaxstart, relaxend
+            character*(*) :: famname
+         end subroutine addfanregion
+
+         subroutine writefanregions(filename)
+            character*(*), intent(in) :: filename
+         end subroutine writefanregions
+       end module fanregion
+
        module actuatorregion ! in :test:actuatorDiskRegion.F90
          subroutine addactuatorregion(pts,conn,axis1,axis2,famname,famid,thrust,torque,relaxstart,relaxend,npts,nconn) ! in :test:actuatorDiskRegion.F90:actuatorregion
            real(kind=realtype) dimension(3,npts),intent(in) :: pts

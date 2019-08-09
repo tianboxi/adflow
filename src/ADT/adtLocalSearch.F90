@@ -836,7 +836,9 @@ contains
           ! And exit the loop over the bounding boxes.
 
           exit BBoxLoop
-       endif
+       
+       end if 
+
 
     enddo BBoxLoop
 

@@ -48,6 +48,7 @@ fortranFiles=	ADT/adtUtils.F90\
 		modules/BCDataMod.F90\
 		modules/userSurfaceIntegrationData.F90\
 		modules/actuatorRegionData.F90\
+    modules/fanRegionData.F90\
 		\
 		NKSolver/NKSolvers.F90\
 		NKSolver/blockette.F90\
@@ -95,6 +96,7 @@ fortranFiles=	ADT/adtUtils.F90\
 		solver/zipperIntegrations.F90\
 		solver/userSurfaceIntegrations.F90\
 		solver/actuatorRegion.F90\
+    solver/fanRegion.F90\
 		solver/ALEUtils.F90\
 		solver/residuals.F90\
 		solver/smoothers.F90\
