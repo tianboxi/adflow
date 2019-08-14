@@ -1617,6 +1617,8 @@ contains
           case ('totalR')
              monGlob(mm) = sqrt(monGlob(mm))
              totalR = monGlob(mm)
+          case ('mdot')
+             monGlob(mm) = localValues(iMassFlowInlet)
           end select
 
           if( myIsNAN(monGlob(mm)) ) nanOccurred = .true.

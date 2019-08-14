@@ -493,7 +493,7 @@ contains
        delta = asin(abs(Wnmag)/Wmag)
        
        ! compute force magnitude
-       Fmag = (2*pi*delta)*(0.5*Wmag**2/normalcyl(2))/(2*pi*coordcyl(1)/B)
+       Fmag = (2*pi*delta)*(0.5*Wmag**2/abs(normalcyl(2)))/(2*pi*coordcyl(1)/B)
        
        ! compute Wt cross normal
        call myCrossP(Wt, normal, tmp)
@@ -502,12 +502,16 @@ contains
        call myCrossP(tmp, Wvec, Ftmp)
 
        ! compute the actual force vector
-       Ftmp = -1 * Fmag * Ftmp * volRef(i,j,k)/pRef
+       if (Wnmag >=0) then
+          Ftmp = -1 * Fmag * Ftmp * volRef(i,j,k)/pRef
+       else
+          Ftmp = Fmag * Ftmp * volRef(i,j,k)/pRef
+       end if
 
        fanRegions(iRegion)%F(:, ii) = Ftmp
 
        ! Use unitform force vector for debug purpose
-       Ftmp = volRef(i, j, k) * Fact
+       !Ftmp = volRef(i, j, k) * Fact
 
        if (res) then
           ! Momentum residuals

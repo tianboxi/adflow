@@ -236,10 +236,12 @@ class ADFLOW(AeroSolver):
 
         # Finally complete loading
         self.adflow.inputparamroutines.dummyreadparamfile()
+
+        # If we are only doing partition test, do it and return
         if self.getOption('partitionOnly'):
             self.adflow.partitioning.partitionandreadgrid(True)
             return
-
+        # record time
         introTime = time.time()
 
         self.adflow.partitioning.partitionandreadgrid(False)
@@ -5034,7 +5036,7 @@ class ADFLOW(AeroSolver):
         for key in iDV:
             iDV[key] = iDV[key] - 1
 
-            # Extra DVs for the Boundary condition variables
+        # Extra DVs for the Boundary condition variables
         BCDV = ['pressure', 'pressurestagnation', 'temperaturestagnation', 'thrust']
 
         # This is ADflow's internal mapping for cost functions

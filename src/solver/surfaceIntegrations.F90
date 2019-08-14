@@ -883,6 +883,10 @@ contains
     localValues(iMassny)   = localValues(iMassny)   + mass_ny
     localValues(iMassnz)   = localValues(iMassnz)   + mass_nz
 
+    if ( isInflow) then
+       localValues(iMassFlowInlet) = localValues(iMassFlowInlet) + massFlowRate
+    endif
+
   end subroutine flowIntegrationFace
 
 

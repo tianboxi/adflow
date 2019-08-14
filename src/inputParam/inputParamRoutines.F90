@@ -317,6 +317,8 @@ contains
              sortNumber(i) = 12004
              nMonMax       = nMonMax - 1
           endif
+       case('mdot')
+          sortNumber(i) = 117
 
        case default
           call terminate("checkMonitor", "This should not happen")
@@ -793,7 +795,7 @@ contains
 
     ! Extract the multigrid info from the string.
 
-    call extractMgInfo
+    call extractMGInfo
 
     ! If no monitoring variables were specified, set the default set.
     ! Idem for the surface and volume output variables.
@@ -1605,6 +1607,10 @@ contains
        case("axismoment")
           nMon = nMon + 1; nMonSum = nMonSum + 1
           tmpNames(nMon) = cgnsAxisMoment
+
+       case("mdot")
+          nMon = nMon +1; nMonSum = nMonSum + 1
+          tmpNames(nMon) = 'mdot'
 
        case default
           write(errorMessage,"(3a)") "Unknown monitoring variable, ", &
@@ -3817,10 +3823,12 @@ contains
 #ifdef USE_SINGLE_PRECISION
     precisionGrid = precisionSingle   ! Default IO precision depends
     precisionSol  = precisionSingle   ! on the default floating
-#else                                    ! point type used. Note that
+                                      ! point type used. Note that
+#else                                    
     precisionGrid = precisionDouble   ! for quadrupole precision the
     precisionSol  = precisionDouble   ! IO takes place in double
-#endif                                   ! precision.
+                                      ! precision.                 
+#endif                                   
 
     ! Surface solution defaults to single precision
     precisionSurfGrid = precisionSingle

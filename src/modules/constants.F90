@@ -432,7 +432,7 @@ module constants
        costfuncmavgvz = 85, &
        costfunccperror2 = 86
 
-  integer(kind=intType), parameter :: nLocalValues=47
+  integer(kind=intType), parameter :: nLocalValues=48
   integer(kind=intType), parameter :: &
        iFp =  1, &
        iFv =  4, &
@@ -464,7 +464,8 @@ module constants
        iMassnz     = 44, &
        iAxisMoment = 45, &
        iPower      = 46, &
-       iCpError2   = 47
+       iCpError2   = 47, &
+       iMassFlowInlet = 48
 
   ! Constants for zipper comm
 
