@@ -621,7 +621,7 @@ class ADFLOW(AeroSolver):
             pts.T, conn.T, familyName, famID, isInflow)
 
     
-    def addFanRegion(self, fileName, familyName, omega, B):
+    def addFanRegion(self, fileName, familyName, omega, B, blockage=None):
 
         """Add a 3D bodyforce field based on supplied shape of camber
         surface defined by a few camberlines contained in a CVS file.
@@ -640,7 +640,7 @@ class ADFLOW(AeroSolver):
 
         """
         # create a surface grid for the blade camber surface
-        conn, pts, normals = self._createCamberSurface(fileName)
+        conn, pts, data = self._createCamberSurface(fileName, blockage)
 
         nconn = conn.shape[1]
         npts = pts.shape[1]
@@ -656,7 +656,7 @@ class ADFLOW(AeroSolver):
 
 
         self.adflow.fanregion.addfanregion(
-            pts, conn, normals, omega, B, familyName, famID, 
+            pts, conn, data, omega, B, familyName, famID, 
             relaxStart, relaxEnd, npts, nconn)
         #self.adflow.fanregion.writefanregions('fanregion.vtk')
 
@@ -5265,7 +5265,7 @@ class ADFLOW(AeroSolver):
         slave.isSlave = True
         return slave
 
-    def _createCamberSurface(self, fileName):
+    def _createCamberSurface(self, fileName, blkpresent):
         """ create a camber surface from several camber lines """
         # number of camber lines and number of points per camberline to read
         nsecf = int(self._readCSV(fileName,0,0,0))
@@ -5273,6 +5273,11 @@ class ADFLOW(AeroSolver):
         X = self._readCSV(fileName,0,1,None)
         R = self._readCSV(fileName,1,1,None)
         T = self._readCSV(fileName,2,1,None)
+        if (blkpresent is not None):
+            b = self._readCSV(fileName,3,1,None)
+            b = numpy.reshape(b,(nptsf,nsecf),order='F')
+        else:
+            b = numpy.empty([nptsf,nsecf])
         X = numpy.reshape(X,(nptsf,nsecf),order='F')
         R = numpy.reshape(R,(nptsf,nsecf),order='F')
         T = numpy.reshape(T,(nptsf,nsecf),order='F')
@@ -5298,16 +5303,31 @@ class ADFLOW(AeroSolver):
              out = interpolate.splev(unew,tck)
              out = numpy.asarray(out)
              X[i,:], Y[i,:], Z[i,:] = out[0,:], out[1,:], out[2,:]
+        # interpolation for the blockage
+        btmp = numpy.empty([npts,nsecf])
+        for i in range (nsecf):
+            uold = numpy.linspace(0,1,nptsf)
+            unew = numpy.linspace(0,1,npts)
+            f = interpolate.interp1d(uold,b[:,i])
+            btmp[:,i] = f(unew)
+        b = numpy.empty([npts,nsec])
+        for i in range(npts):
+            uold = numpy.linspace(0,1,nsecf)
+            unew = numpy.linspace(0,1,nsec)
+            f = interpolate.interp1d(uold,btmp[i,:])
+            b[i,:] = f(unew)
         # create point and index array
         count = 0
         ind = numpy.empty([npts,nsec],dtype=int)
         pts = numpy.empty([3,npts_tot])
+        blk = numpy.empty([npts_tot])
         for j in range(nsec):
           for i in range(npts):
             ind[i,j] = count
             pts[0,ind[i,j]] = X[i,j]
             pts[1,ind[i,j]] = Y[i,j]
             pts[2,ind[i,j]] = Z[i,j]
+            blk[ind[i,j]] = b[i,j]
             count = count + 1
         # create connectivity
         ncell = (npts-1)*(nsec-1)
@@ -5333,7 +5353,7 @@ class ADFLOW(AeroSolver):
         for i in range(3):
           normals[i,:] = normals[i,:]/normalcount
         # write cambere surface into a VTK file for verification
-        self._writeVTK(pts, conn, 'camber.vtk', 'surface', [[normals,'Normals']])
+        self._writeVTK(pts, conn, 'camber.vtk', 'surface', [[normals,'Normals'],[blk,'blockage']])
 
         # Project blade surface on to the axisymmetrical plane
         R = numpy.sqrt(numpy.power(Z,2) + numpy.power(Y,2))
@@ -5342,6 +5362,7 @@ class ADFLOW(AeroSolver):
         Xvol,Yvol,Zvol = numpy.empty([npts,nsec,ntan]), numpy.empty([npts,nsec,ntan]),\
                      numpy.empty([npts,nsec,ntan])
         volnormals = numpy.empty([npts,nsec,ntan,3])
+        volb = numpy.empty([npts,nsec,ntan])
         for k in range(ntan):
           for j in range(nsec):
             for i in range(npts):
@@ -5352,10 +5373,12 @@ class ADFLOW(AeroSolver):
               volnormals[i,j,k,1] = normals[1,ind[i,j]]*numpy.cos(T[k])+normals[2,ind[i,j]]*-1*numpy.sin(T[k])
               volnormals[i,j,k,2] = normals[1,ind[i,j]]*numpy.sin(T[k])+normals[2,ind[i,j]]*numpy.cos(T[k])
               volnormals[i,j,k,0] = normals[0,ind[i,j]]
+              volb[i,j,k] = b[i,j]
         # create point and index array
         npts_tot = ntan*nsec*npts
         volpts, ind = numpy.empty([3, npts_tot]), numpy.empty([npts, nsec, ntan], dtype=int)
         normalout = numpy.empty([3, npts_tot])
+        dataout = numpy.empty([4, npts_tot])
         count = 0
         for k in range(ntan):
           for j in range(nsec):
@@ -5364,6 +5387,8 @@ class ADFLOW(AeroSolver):
               volpts[1, count] = Yvol[i,j,k]
               volpts[2, count] = Zvol[i,j,k]
               normalout[:, count] = volnormals[i,j,k,:]
+              dataout[0:2, count] = volnormals[i,j,k,:]
+              dataout[3, count] = volb[i,j,k] 
               ind[i,j,k] = count
               count = count + 1
         # create connectivity
@@ -5391,7 +5416,7 @@ class ADFLOW(AeroSolver):
         # Write volume VTK file for verification
         self._writeVTK(volpts, volconn, 'volume.vtk', 'volume', [[normalout, 'Normals']])
 
-        return volconn, volpts, normalout
+        return volconn, volpts, dataout 
 
     def _writeVTK(self, pts, conn, name,datatype='surface',datalist=None):
         if datatype =='surface':

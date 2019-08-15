@@ -6,7 +6,7 @@ module fanRegion
   implicit none
 
 contains
-  subroutine addFanRegion(pts, conn, normals, omega, B, famName, famID, &
+  subroutine addFanRegion(pts, conn, donorData, omega, B, famName, famID, &
       relaxStart, relaxEnd, nPts, nConn)
 
     use communication, only : myID, adflow_comm_world
@@ -23,24 +23,25 @@ contains
     ! Input variables
     real(kind=realType), dimension(3, nPts), intent(in), target :: pts
     integer(kind=intType), dimension(8, nConn), intent(in), target :: conn
-    real(kind=realType), dimension(3, nPts), intent(in), target :: normals
+    real(kind=realType), dimension(4, nPts), intent(in), target :: donorData 
     integer(kind=intType), intent(in) :: nPts, nConn, famID
     real(kind=realType), intent(in) :: omega, B, relaxStart, relaxEnd
     character(len=*) :: famName
 
     ! Working variables
     integer(kind=intType) :: i, j, k, nn, iDim, cellID, intInfo(3), sps, level, nData, ierr, iii
-    real(kind=realType) :: volLocal
+    real(kind=realType) :: volLocal, interpdata(4)
     type(fanRegionType), pointer :: region
     type(adtType) :: ADT
     integer(kind=intType), dimension(:,:), pointer :: tmp
-    real(kind=realType), dimension(:,:), pointer :: tmp2
+    real(kind=realType), dimension(:,:), pointer :: tmpr
+    real(kind=realType), dimension(:), pointer :: tmp2
     logical :: failed
 
     ! ADT Type required data
     integer(kind=intType), dimension(:), pointer :: frontLeaves, frontLeavesNew
     integer(kind=intType), dimension(:), pointer :: BB
-    real(kind=realType) :: coor(3), uvw(6)
+    real(kind=realType) :: coor(3), uvw(7)
 
     nFanRegions = nFanRegions + 1
 
@@ -63,6 +64,7 @@ contains
     ! Allocate sufficient space for the maximum possible number of cellIDs
     allocate(region%cellIDs(3, nCellsLocal(1)))
     allocate(region%normals(3, nCellsLocal(1)))
+    allocate(region%blockage(nCellsLocal(1)))
 
     ! Build the ADT tree.
     call buildSerialHex(nConn, nPts, pts, conn, ADT)
@@ -70,8 +72,8 @@ contains
     ! Only work for single grid now
     sps = 1
     level = 1
-    ! Three components of normal vector need to be interpolated
-    nData = 3
+    ! Three components of normal vector and blockage factor need to be interpolated
+    nData = 4 
     failed = .True.
     ! Loop for searching
     do nn=1, nDom
@@ -91,7 +93,7 @@ contains
                    uvw(2) = -1.0_realType
                    uvw(3) = -1.0_realType
                    call containmentTreeSearchSinglePoint(ADT, coor, intInfo, &
-                        uvw, normals, nData, BB, frontLeaves, frontLeavesNew, failed)
+                        uvw, donorData, nData, BB, frontLeaves, frontLeavesNew, failed)
                    if(uvw(1) > zero .and. uvw(1) < one .and. &
                       uvw(2) > zero .and. uvw(2) < one .and. &
                       uvw(3) > zero .and. uvw(3) < one .and. .not. failed) then
@@ -99,6 +101,7 @@ contains
                       region%nCellIDs = region%nCellIDs + 1
                       region%cellIDs(:, region%nCellIDs) = (/i, j, k/)
                       region%normals(:, region%nCellIDs) = uvw(4:6)
+                      region%blockage(region%nCellIDs) = uvw(7)
                    end if 
                 end if
              end do
@@ -114,13 +117,18 @@ contains
     allocate(region%cellIDs(3, region%nCellIDs))
     region%cellIDs = tmp(:, 1:region%nCellIDs)
     deallocate(tmp)
-    tmp2 => region%normals
+    tmpr => region%normals
     allocate(region%normals(3, region%nCellIDs))
-    region%normals = tmp2(:, 1:region%nCellIDs)
+    region%normals = tmpr(:, 1:region%nCellIDs)
+    deallocate(tmpr)
+    tmp2 => region%blockage
+    allocate(region%blockage(region%nCellIDs))
+    region%blockage = tmp2(1:region%nCellIDs)
     deallocate(tmp2)
+
     allocate(region%F(3, region%nCellIDs))
-    allocate(region%W(3, region%nCellIDs))
-    allocate(region%Wt(3, region%nCellIDs))
+    !allocate(region%W(3, region%nCellIDs))
+    !allocate(region%Wt(3, region%nCellIDs))
   
     volLocal = zero
 

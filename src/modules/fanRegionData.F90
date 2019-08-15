@@ -20,6 +20,9 @@ module fanRegionData
      ! B is the number of blades in fan 
      real(kind=realType) :: B
 
+     ! blokage factor
+     real(kind=realType), dimension(:), pointer :: blockage 
+
      ! F is the cell bodyforce
      real(kind=realType), dimension(:,:), pointer :: F
 
