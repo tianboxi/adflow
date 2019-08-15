@@ -15,7 +15,7 @@ contains
     use adtLocalSearch, only : containmentTreeSearchSinglePoint
     use ADTUtils, only : stack
     use ADTData
-    use blockPointers, only : x, il, jl, kl, nDom, iBlank, vol
+    use blockPointers, only : x, il, jl, kl, nDom, iBlank, vol, volRef, si, sj, sk
     use adjointVars, only : nCellsLocal
     use utils, only : setPointers, EChk
     implicit none
@@ -30,7 +30,7 @@ contains
 
     ! Working variables
     integer(kind=intType) :: i, j, k, nn, iDim, cellID, intInfo(3), sps, level, nData, ierr, iii
-    real(kind=realType) :: volLocal, interpdata(4)
+    real(kind=realType) :: volLocal
     type(fanRegionType), pointer :: region
     type(adtType) :: ADT
     integer(kind=intType), dimension(:,:), pointer :: tmp
@@ -127,9 +127,11 @@ contains
     deallocate(tmp2)
 
     allocate(region%F(3, region%nCellIDs))
-    !allocate(region%W(3, region%nCellIDs))
-    !allocate(region%Wt(3, region%nCellIDs))
-  
+    allocate(region%W(3, region%nCellIDs))
+    allocate(region%Wt(3, region%nCellIDs))
+ 
+    ! Perform corrections for the cell vols and face area projections
+    ! in i and j direction (due to blockage)
     volLocal = zero
 
     do nn=1, nDom
@@ -140,6 +142,10 @@ contains
           i = region%cellIDs(1, iii)
           j = region%cellIDs(2, iii)
           k = region%cellIDs(3, iii)
+          vol(i,j,k) = vol(i,j,k) * region%blockage(iii)
+          volRef(i,j,k) = volRef(i,j,k) * region%blockage(iii)
+          si(i,j,k,:) = si(i,j,k,:) * region%blockage(iii)
+          sj(i,j,k,:) = sj(i,j,k,:) * region%blockage(iii)
           volLocal = volLocal + vol(i, j, k)
        end do
     end do
@@ -176,7 +182,7 @@ contains
     integer(kind=intType) :: iRegion, nn, i, j, k, ii, jj, kk, iii, kkk, iDim
     integer(kind=intType) :: level, sps, iProc, ierr, totalCount, offset, nUnique
     integer(kind=intType), dimension(:), allocatable :: sizesProc, cumSizesProc
-    real(kind=realType) , dimension(:), allocatable :: pts, allPts
+    real(kind=realType) , dimension(:), allocatable :: pts, allPts, blockage
     real(kind=realType) , dimension(:,:), allocatable :: cellNormals
     real(kind=realType) , dimension(:,:), allocatable :: tmp, uniquePts
     real(kind=realType), parameter :: tol=1e-8
@@ -219,6 +225,7 @@ contains
 
        ! Fill up our own nodes/conn with the nodes we have here.
        allocate(conn(8*region%nCellIDs), pts(24*region%nCellIDs), cellNormals(3,region%nCellIDs))
+       allocate(blockage(region%nCellIDs))
 
        kkk = 0
        do nn=1, nDom
@@ -354,6 +361,12 @@ contains
                 write(101,13,advance='no') region%Wt(iDim, i)
              end do
              write(101,"(1x)")
+          end do
+
+          write(101,*) "SCALARS blockage double 1"
+          write(101,*) "LOOKUP_TABLE default"
+          do i=1, totalcount
+              write(101,13) region%blockage(i)
           end do
 
           ! Ditch the memory only allocated on this proc

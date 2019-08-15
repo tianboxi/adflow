@@ -5273,11 +5273,11 @@ class ADFLOW(AeroSolver):
         X = self._readCSV(fileName,0,1,None)
         R = self._readCSV(fileName,1,1,None)
         T = self._readCSV(fileName,2,1,None)
-        if (blkpresent is not None):
+        if (blkpresent):
             b = self._readCSV(fileName,3,1,None)
             b = numpy.reshape(b,(nptsf,nsecf),order='F')
         else:
-            b = numpy.empty([nptsf,nsecf])
+            b = numpy.ones((nptsf,nsecf))
         X = numpy.reshape(X,(nptsf,nsecf),order='F')
         R = numpy.reshape(R,(nptsf,nsecf),order='F')
         T = numpy.reshape(T,(nptsf,nsecf),order='F')
@@ -5378,6 +5378,7 @@ class ADFLOW(AeroSolver):
         npts_tot = ntan*nsec*npts
         volpts, ind = numpy.empty([3, npts_tot]), numpy.empty([npts, nsec, ntan], dtype=int)
         normalout = numpy.empty([3, npts_tot])
+        blkout = numpy.empty([npts_tot])
         dataout = numpy.empty([4, npts_tot])
         count = 0
         for k in range(ntan):
@@ -5387,8 +5388,10 @@ class ADFLOW(AeroSolver):
               volpts[1, count] = Yvol[i,j,k]
               volpts[2, count] = Zvol[i,j,k]
               normalout[:, count] = volnormals[i,j,k,:]
-              dataout[0:2, count] = volnormals[i,j,k,:]
-              dataout[3, count] = volb[i,j,k] 
+              blkout[count] = volb[i,j,k]
+              for iDim in range(3):
+                 dataout[iDim, count] = volnormals[i,j,k,iDim]
+              dataout[-1, count] = volb[i,j,k] 
               ind[i,j,k] = count
               count = count + 1
         # create connectivity
@@ -5414,7 +5417,7 @@ class ADFLOW(AeroSolver):
                 volconn[7,ll] = ind[i,j+1,k+1]
               ll = ll+1
         # Write volume VTK file for verification
-        self._writeVTK(volpts, volconn, 'volume.vtk', 'volume', [[normalout, 'Normals']])
+        self._writeVTK(volpts, volconn, 'volume.vtk', 'volume', [[normalout, 'Normals'],[blkout, 'Blockage']])
 
         return volconn, volpts, dataout 
 

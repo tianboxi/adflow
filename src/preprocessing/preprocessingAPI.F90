@@ -2751,7 +2751,7 @@ contains
     !
     integer :: ierr
 
-    integer(kind=intType) :: i, j, k, n, m, l
+    integer(kind=intType) :: i, j, k, n, m, l, iii
     integer(kind=intType) :: nn, mm, sps
     integer(kind=intType) :: nVolNeg,   nVolPos
     integer(kind=intType) :: nVolBad,   nVolBadGlobal
@@ -3037,6 +3037,7 @@ contains
           else
              checkVolDoms(nn,sps)%blockHasNegVol = .false.
           endif
+
           !
           !           Computation of the face normals in i-, j- and k-direction.
           !           Formula's are valid for a right handed block; for a left
