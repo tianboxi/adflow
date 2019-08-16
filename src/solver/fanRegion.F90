@@ -72,7 +72,7 @@ contains
     ! Only work for single grid now
     sps = 1
     level = 1
-    ! Three components of normal vector and blockage factor need to be interpolated
+    ! Three components of normal vector and the blockage factor need to be interpolated
     nData = 4 
     failed = .True.
     ! Loop for searching

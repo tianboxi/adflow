@@ -658,7 +658,7 @@ class ADFLOW(AeroSolver):
         self.adflow.fanregion.addfanregion(
             pts, conn, data, omega, B, familyName, famID, 
             relaxStart, relaxEnd, npts, nconn)
-        #self.adflow.fanregion.writefanregions('fanregion.vtk')
+        self.adflow.fanregion.writefanregions('fanregion.vtk')
 
         
     def addActuatorRegion(self, fileName, axis1, axis2, familyName,
@@ -5284,7 +5284,8 @@ class ADFLOW(AeroSolver):
         Y = R * numpy.cos(T)
         Z = R * numpy.sin(T)
         # metrics for the interpolated surface grid
-        nsec, npts, ntan = 80, 50, 300 
+        nsec, npts, ntan = 70, 50, 300 
+
         # perform spline interpolation for the camber surface
         npts_tot = nsec*npts
         # interpolation within each camberline
@@ -5418,6 +5419,8 @@ class ADFLOW(AeroSolver):
               ll = ll+1
         # Write volume VTK file for verification
         self._writeVTK(volpts, volconn, 'volume.vtk', 'volume', [[normalout, 'Normals'],[blkout, 'Blockage']])
+        # Convert vtk conn(ind from 0 ) to fortran conn (ind from 1)
+        volconn = volconn+1
 
         return volconn, volpts, dataout 
 
@@ -5470,7 +5473,7 @@ class ADFLOW(AeroSolver):
               outputfile.write(name)
               outputfile.write(' double 1\nLOOKUP_TABLE default\n')
               for i in range(ntotal):
-                outputfile.write("%f \t" % (entry[i]))
+                outputfile.write("%f \n" % (entry[i]))
             elif len(datalist[n][0].shape) == 2: # Vector data
               entry = datalist[n][0]
               name = datalist[n][1]

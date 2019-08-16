@@ -1138,7 +1138,7 @@ contains
 
           ! Uncomment the following line to write a vtk file of the
           ! source volume with bodyforces
-          call writeFanRegions('fanregion.vtk')
+          !call writeFanRegions('fanregion.vtk')
 
        end do
     end do domains

@@ -827,7 +827,7 @@ contains
 
           do ll=1,nInterpol
              ii = 3+ll
-             uvw(ii) = weight(1)*arrDonor(ll,n(1))
+                uvw(ii) = weight(1)*arrDonor(ll,n(1))
              do i=2,nNodeElement
                 uvw(ii) = uvw(ii) + weight(i)*arrDonor(ll,n(i))
              enddo
