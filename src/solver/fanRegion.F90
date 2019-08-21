@@ -44,7 +44,7 @@ contains
     real(kind=realType) :: coor(3), uvw(7)
 
     nFanRegions = nFanRegions + 1
-
+    
     ! Set pointers and save fan region info
     region => fanRegions(nFanRegions)
     region%famName = famName

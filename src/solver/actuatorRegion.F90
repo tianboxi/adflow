@@ -434,8 +434,8 @@ contains
     use flowVarRefState, only : Pref, uRef
     use utils, only : setPointers
     use sorting, only : famInList
-    use residuals, only : sourceTerms_block
-    use actuatorRegionData
+    use residuals, only : fanSourceTerms_block
+    use fanRegionData
     use communication
     ! Input/output Variables
     real(kind=realType), dimension(nLocalValues), intent(inout) :: localValues
@@ -454,13 +454,13 @@ contains
        call setPointers(nn, 1, sps)
 
        ! Loop over each region
-       regionLoop: do iRegion=1, nActuatorRegions
+       regionLoop: do iRegion=1, nFanRegions
 
           ! Check if this needs to be included:
-          famInclude: if (famInList(actuatorRegions(iRegion)%famID, famList)) then
+          famInclude: if (famInList(fanRegions(iRegion)%famID, famList)) then
 
              ! If so, call the regular sourceTerms_block routine
-             call sourceTerms_block(nn, .False., iRegion, pLocal)
+             call fanSourceTerms_block(nn, .False., iRegion, pLocal)
 
           end if famInclude
        end do regionLoop
