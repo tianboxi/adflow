@@ -421,14 +421,6 @@ contains
        factor = (ordersConverged - oStart)/(oEnd - oStart)
     end if
 
-    ! Compute the constant force factor
-    !fact = factor*actuatorRegions(iRegion)%F / actuatorRegions(iRegion)%volume / pRef
-    Fact(1) = 1.0
-    Fact(2) = 0.0
-    Fact(3) = 0.0
-
-    Fact = Fact/fanRegions(iRegion)%volume/pRef
-
     ! Loop over the ranges for this block
     iStart = fanRegions(iRegion)%blkPtr(nn-1) + 1
     iEnd =  fanRegions(iRegion)%blkPtr(nn)
@@ -440,91 +432,100 @@ contains
 
     Omega = Omega*2*pi/60.0
 
-    !$AD II-LOOP
-    do ii=iStart, iEnd
-       
-       ! Extract the cell ID.
-       i = fanRegions(iRegion)%cellIDs(1, ii)
-       j = fanRegions(iRegion)%cellIDs(2, ii)
-       k = fanRegions(iRegion)%cellIDs(3, ii)
+    if (fanRegions(iRegion)%flowTurning) then
 
-       ! Get blade region info of this cell
-       normal = fanRegions(iRegion)%normals(:, ii)
-              
+       !$AD II-LOOP
+       do ii=iStart, iEnd
+          
+          ! Extract the cell ID.
+          i = fanRegions(iRegion)%cellIDs(1, ii)
+          j = fanRegions(iRegion)%cellIDs(2, ii)
+          k = fanRegions(iRegion)%cellIDs(3, ii)
 
-       ! Compute the cell center
-       coord = eighth*(x(i-1,j-1,k-1,:) + x(i,j-1,k-1,:)  &
-             +         x(i-1,j,  k-1,:) + x(i,j,  k-1,:)  &
-             +         x(i-1,j-1,k,  :) + x(i,j-1,k,  :)  &
-             +         x(i-1,j,  k,  :) + x(i,j,  k,  :))
+          ! Get blade region info of this cell
+          normal = fanRegions(iRegion)%normals(:, ii)
+                 
 
-       ! Get velocities
-       V(1) = w(i, j, k, iVx)
-       V(2) = w(i, j, k, iVy)
-       V(3) = w(i, j, k, iVz)
+          ! Compute the cell center
+          coord = eighth*(x(i-1,j-1,k-1,:) + x(i,j-1,k-1,:)  &
+                +         x(i-1,j,  k-1,:) + x(i,j,  k-1,:)  &
+                +         x(i-1,j-1,k,  :) + x(i,j-1,k,  :)  &
+                +         x(i-1,j,  k,  :) + x(i,j,  k,  :))
 
-       ! Velocities in cylindrical coordinate
-       call convertCoordToCyl(coord, coordcyl)
-       call convertVecToCyl(V, coordcyl(2), Vcyl)
-       call convertVecToCyl(normal, coordcyl(2), normalcyl) 
+          ! Get velocities
+          V(1) = w(i, j, k, iVx)
+          V(2) = w(i, j, k, iVy)
+          V(3) = w(i, j, k, iVz)
 
-       ! Get velocities in relative frame
-       Wcyl(1) = Vcyl(1)
-       Wcyl(2) = Vcyl(2) + Omega*coordcyl(1)
-       Wcyl(3) = Vcyl(3)
+          ! Velocities in cylindrical coordinate
+          call convertCoordToCyl(coord, coordcyl)
+          call convertVecToCyl(V, coordcyl(2), Vcyl)
+          call convertVecToCyl(normal, coordcyl(2), normalcyl) 
 
-       call convertVecToCart(Wcyl, coordcyl(2), Wvec)
+          ! Get velocities in relative frame
+          Wcyl(1) = Vcyl(1)
+          Wcyl(2) = Vcyl(2) + Omega*coordcyl(1)
+          Wcyl(3) = Vcyl(3)
 
-       fanRegions(iRegion)%W(:, ii) = Wvec
+          call convertVecToCart(Wcyl, coordcyl(2), Wvec)
 
-       Wmag = sqrt(Wvec(1)**2 + Wvec(2)**2 + Wvec(3)**2)
+          fanRegions(iRegion)%W(:, ii) = Wvec
 
-       ! compute relative flow component normal to the blade
-       Wnmag = Wvec(1)*normal(1) + Wvec(2)*normal(2) + Wvec(3)*normal(3)
-       do iDim=1, 3
-          Wn(iDim) = Wnmag * normal(iDim)
+          Wmag = sqrt(Wvec(1)**2 + Wvec(2)**2 + Wvec(3)**2)
+
+          ! compute relative flow component normal to the blade
+          Wnmag = Wvec(1)*normal(1) + Wvec(2)*normal(2) + Wvec(3)*normal(3)
+          do iDim=1, 3
+             Wn(iDim) = Wnmag * normal(iDim)
+          end do
+          
+          ! compute relative flow tengential to the flow
+          Wt = Wvec - Wn
+          fanRegions(iRegion)%Wt(:, ii) = Wt
+
+          ! compute relative flow angle from the blade tengential 
+          delta = asin(abs(Wnmag)/Wmag)
+          
+          ! compute force magnitude
+          Fmag = (2*pi*delta)*(0.5*Wmag**2/abs(normalcyl(2)))/(2*pi*coordcyl(1)/B)
+          
+          ! compute Wt cross normal
+          call myCrossP(Wt, normal, tmp)
+
+          ! compute (Wt cross normal) cross W
+          call myCrossP(tmp, Wvec, Ftmp)
+
+          ! compute the actual force vector
+          if (Wnmag >=0) then
+             Ftmp = -1 * Fmag * Ftmp * volRef(i,j,k)/pRef
+          else
+             Ftmp = Fmag * Ftmp * volRef(i,j,k)/pRef
+          end if
+
+          fanRegions(iRegion)%F(:, ii) = Ftmp
+
+          ! Use unitform force vector for debug purpose
+          !Ftmp = volRef(i, j, k) * Fact
+
+          if (res) then
+             ! Momentum residuals
+             dw(i, j, k, imx:imz) = dw(i, j, k, imx:imz) - Ftmp
+
+             ! energy residuals
+             dw(i, j, k, iRhoE) = dw(i, j, k, iRhoE)  - &
+                  Ftmp(1)*V(1) - Ftmp(2)*V(2) - Ftmp(3)*V(3)
+          else
+             ! Add in the local power contribution:
+             pLocal = pLocal + (V(1)*Ftmp(1) + V(2)*FTmp(2) + V(3)*Ftmp(3))*reDim
+          end if
        end do
-       
-       ! compute relative flow tengential to the flow
-       Wt = Wvec - Wn
-       fanRegions(iRegion)%Wt(:, ii) = Wt
-
-       ! compute relative flow angle from the blade tengential 
-       delta = asin(abs(Wnmag)/Wmag)
-       
-       ! compute force magnitude
-       Fmag = (2*pi*delta)*(0.5*Wmag**2/abs(normalcyl(2)))/(2*pi*coordcyl(1)/B)
-       
-       ! compute Wt cross normal
-       call myCrossP(Wt, normal, tmp)
-
-       ! compute (Wt cross normal) cross W
-       call myCrossP(tmp, Wvec, Ftmp)
-
-       ! compute the actual force vector
-       if (Wnmag >=0) then
-          Ftmp = -1 * Fmag * Ftmp * volRef(i,j,k)/pRef
-       else
-          Ftmp = Fmag * Ftmp * volRef(i,j,k)/pRef
-       end if
-
-       fanRegions(iRegion)%F(:, ii) = Ftmp
-
-       ! Use unitform force vector for debug purpose
-       !Ftmp = volRef(i, j, k) * Fact
-
-       if (res) then
-          ! Momentum residuals
-          dw(i, j, k, imx:imz) = dw(i, j, k, imx:imz) - Ftmp
-
-          ! energy residuals
-          dw(i, j, k, iRhoE) = dw(i, j, k, iRhoE)  - &
-               Ftmp(1)*V(1) - Ftmp(2)*V(2) - Ftmp(3)*V(3)
-       else
-          ! Add in the local power contribution:
-          pLocal = pLocal + (V(1)*Ftmp(1) + V(2)*FTmp(2) + V(3)*Ftmp(3))*reDim
-       end if
-    end do
+    else 
+       do ii=iStart, iEnd
+          do iDim =1,3
+             fanRegions(iRegion)%F(iDim, ii) = zero
+          end do 
+       end do 
+    end if 
 
   end subroutine fanSourceTerms_block
 

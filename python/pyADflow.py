@@ -621,7 +621,7 @@ class ADFLOW(AeroSolver):
             pts.T, conn.T, familyName, famID, isInflow)
 
     
-    def addFanRegion(self, fileName, familyName, omega, B, blockage=None):
+    def addFanRegion(self, fileName, familyName, omega, B, turning=False, blockage=False, loss=False):
 
         """Add a 3D bodyforce field based on supplied shape of camber
         surface defined by a few camberlines contained in a CVS file.
@@ -642,22 +642,25 @@ class ADFLOW(AeroSolver):
         # create a surface grid for the blade camber surface
         conn, pts, data = self._createCamberSurface(fileName, blockage)
 
-        nconn = conn.shape[1]
-        npts = pts.shape[1]
+        nconn = len(conn[1,:])
+        npts = len(pts[1,:])
 
+        # add additional family
         maxInd = 0
         for fam in self.families:
             if len(self.families[fam]) > 0:
                 maxInd = max(maxInd, numpy.max(self.families[fam]))
         famID = maxInd + 1
         self.families[familyName.lower()] = [famID]
+
+        # relaxation factor for the source
         relaxStart = -1.0
         relaxEnd = -1.0
 
-
+        # call python functions
         self.adflow.fanregion.addfanregion(
-            pts, conn, data, omega, B, familyName, famID, 
-            relaxStart, relaxEnd, npts, nconn)
+            pts, conn, data, omega, B, familyName, famID,turning, blockage, 
+            loss, relaxStart, relaxEnd, npts, nconn)
         self.adflow.fanregion.writefanregions('fanregion.vtk')
 
         
@@ -5353,11 +5356,110 @@ class ADFLOW(AeroSolver):
             normalcount[conn[j,i]] = normalcount[conn[j,i]] + 1
         for i in range(3):
           normals[i,:] = normals[i,:]/normalcount
-        # write cambere surface into a VTK file for verification
-        self._writeVTK(pts, conn, 'camber.vtk', 'surface', [[normals,'Normals'],[blk,'blockage']])
 
         # Project blade surface on to the axisymmetrical plane
-        R = numpy.sqrt(numpy.power(Z,2) + numpy.power(Y,2))
+        R = numpy.sqrt(Z**2 + Y**2)
+        # compute gradients of the blockage factors db/dx, db/dr by least square
+        dbdr=numpy.zeros((npts,nsec))
+        dbdx=numpy.zeros((npts,nsec))
+        # loop all points 
+        for j in range(nsec):
+          for i in range(npts):
+            A = numpy.zeros((8,2))
+            bb = numpy.zeros((8,1))
+            # bottom left corner cell
+            if (i==0 and j==0):
+              A[0,:] = [X[i,j+1]-X[i,j], R[i,j+1]-R[i,j]]
+              A[1,:] = [X[i+1,j+1]-X[i,j], R[i+1,j+1]-R[i,j]]
+              A[2,:] = [X[i+1,j]-X[i,j], R[i+1,j]-R[i,j]]
+              bb[0],bb[1],bb[2] = b[i,j+1]-b[i,j], b[i+1,j+1]-b[i,j], b[i+1,j]-b[i,j] 
+              [dbdx[i,j],dbdr[i,j]] = numpy.linalg.lstsq(A,bb)[0] # solve least square problem
+            # top left corner cell
+            elif (i==0 and j==nsec-1):
+              A[0,:] = [X[i,j-1]-X[i,j], R[i,j-1]-R[i,j]]
+              A[1,:] = [X[i+1,j-1]-X[i,j], R[i+1,j-1]-R[i,j]]
+              A[2,:] = [X[i+1,j]-X[i,j], R[i+1,j]-R[i,j]]
+              bb[0],bb[1],bb[2] = b[i,j-1]-b[i,j], b[i+1,j-1]-b[i,j], b[i+1,j]-b[i,j] 
+              [dbdx[i,j],dbdr[i,j]] = numpy.linalg.lstsq(A,bb)[0] # solve least square problem
+            # bottom right corner cell
+            elif (i==npts-1 and j ==0):
+              A[0,:] = [X[i,j+1]-X[i,j], R[i,j+1]-R[i,j]]
+              A[1,:] = [X[i-1,j+1]-X[i,j], R[i-1,j+1]-R[i,j]]
+              A[2,:] = [X[i-1,j]-X[i,j], R[i-1,j]-R[i,j]]
+              bb[0],bb[1],bb[2] = b[i,j+1]-b[i,j], b[i-1,j+1]-b[i,j], b[i-1,j]-b[i,j] 
+              [dbdx[i,j],dbdr[i,j]] = numpy.linalg.lstsq(A,bb)[0] # solve least square problem
+            # top right corner cell
+            elif (i==npts-1 and j ==nsec-1):
+              A[0,:] = [X[i,j-1]-X[i,j], R[i,j-1]-R[i,j]]
+              A[1,:] = [X[i-1,j-1]-X[i,j], R[i-1,j-1]-R[i,j]]
+              A[2,:] = [X[i-1,j]-X[i,j], R[i-1,j]-R[i,j]]
+              bb[0],bb[1],bb[2] = b[i,j-1]-b[i,j], b[i-1,j-1]-b[i,j], b[i-1,j]-b[i,j] 
+              [dbdx[i,j],dbdr[i,j]] = numpy.linalg.lstsq(A,bb)[0] # solve least square problem
+            # left boundary cells
+            elif (i==0):
+              A[0,:] = [X[i,j-1]-X[i,j], R[i,j-1]-R[i,j]]
+              A[1,:] = [X[i,j+1]-X[i,j], R[i,j+1]-R[i,j]]
+              A[2,:] = [X[i+1,j+1]-X[i,j], R[i+1,j+1]-R[i,j]]
+              A[3,:] = [X[i+1,j]-X[i,j], R[i+1,j]-R[i,j]]
+              A[4,:] = [X[i+1,j-1]-X[i,j], R[i+1,j-1]-R[i,j]]
+              bb[0],bb[1],bb[2] = b[i,j-1]-b[i,j], b[i,j+1]-b[i,j], b[i+1,j+1]-b[i,j] 
+              bb[3],bb[4] = b[i+1,j]-b[i,j], b[i+1,j-1]-b[i,j]
+              [dbdx[i,j],dbdr[i,j]] = numpy.linalg.lstsq(A,bb)[0] # solve least square problem
+            # right boundary cells
+            elif (i==npts-1):
+              A[0,:] = [X[i,j-1]-X[i,j], R[i,j-1]-R[i,j]]
+              A[1,:] = [X[i-1,j-1]-X[i,j], R[i-1,j-1]-R[i,j]]
+              A[2,:] = [X[i-1,j]-X[i,j], R[i-1,j]-R[i,j]]
+              A[3,:] = [X[i-1,j+1]-X[i,j], R[i-1,j+1]-R[i,j]]
+              A[4,:] = [X[i,j+1]-X[i,j], R[i,j+1]-R[i,j]]
+              bb[0],bb[1],bb[2] = b[i,j-1]-b[i,j], b[i-1,j-1]-b[i,j], b[i-1,j]-b[i,j] 
+              bb[3],bb[4] = b[i-1,j+1]-b[i,j], b[i,j+1]-b[i,j]
+              [dbdx[i,j],dbdr[i,j]] = numpy.linalg.lstsq(A,bb)[0] # solve least square problem
+            # bottom boundary cells
+            elif (j==0):
+              A[0,:] = [X[i-1,j]-X[i,j], R[i-1,j]-R[i,j]]
+              A[1,:] = [X[i-1,j+1]-X[i,j], R[i-1,j+1]-R[i,j]]
+              A[2,:] = [X[i,j+1]-X[i,j], R[i,j+1]-R[i,j]]
+              A[3,:] = [X[i+1,j+1]-X[i,j], R[i+1,j+1]-R[i,j]]
+              A[4,:] = [X[i+1,j]-X[i,j], R[i+1,j]-R[i,j]]
+              bb[0],bb[1],bb[2] = b[i-1,j]-b[i,j], b[i-1,j+1]-b[i,j], b[i,j+1]-b[i,j] 
+              bb[3],bb[4] = b[i+1,j+1]-b[i,j], b[i+1,j]-b[i,j]
+              [dbdx[i,j],dbdr[i,j]] = numpy.linalg.lstsq(A,bb)[0] # solve least square problem
+            # top boundary cells
+            elif (j==nsec-1):
+              A[0,:] = [X[i,j-1]-X[i,j], R[i,j-1]-R[i,j]]
+              A[1,:] = [X[i-1,j-1]-X[i,j], R[i-1,j-1]-R[i,j]]
+              A[2,:] = [X[i-1,j]-X[i,j], R[i-1,j]-R[i,j]]
+              A[3,:] = [X[i+1,j]-X[i,j], R[i+1,j]-R[i,j]]
+              A[4,:] = [X[i+1,j-1]-X[i,j], R[i+1,j-1]-R[i,j]]
+              bb[0],bb[1],bb[2] = b[i,j-1]-b[i,j], b[i-1,j-1]-b[i,j], b[i-1,j]-b[i,j] 
+              bb[3],bb[4] = b[i+1,j]-b[i,j], b[i+1,j-1]-b[i,j]
+              [dbdx[i,j],dbdr[i,j]] = numpy.linalg.lstsq(A,bb)[0] # solve least square problem
+            # interior cells
+            else:
+              A[0,:] = [X[i,j-1]-X[i,j], R[i,j-1]-R[i,j]]
+              A[1,:] = [X[i-1,j-1]-X[i,j], R[i-1,j-1]-R[i,j]]
+              A[2,:] = [X[i-1,j]-X[i,j], R[i-1,j]-R[i,j]]
+              A[3,:] = [X[i-1,j+1]-X[i,j], R[i-1,j+1]-R[i,j]]
+              A[4,:] = [X[i,j+1]-X[i,j], R[i,j+1]-R[i,j]]
+              A[5,:] = [X[i+1,j+1]-X[i,j], R[i+1,j+1]-R[i,j]]
+              A[6,:] = [X[i+1,j]-X[i,j], R[i+1,j]-R[i,j]]
+              A[7,:] = [X[i+1,j-1]-X[i,j], R[i+1,j-1]-R[i,j]]
+              bb[0],bb[1],bb[2] = b[i,j-1]-b[i,j], b[i-1,j-1]-b[i,j], b[i-1,j]-b[i,j] 
+              bb[3],bb[4],bb[5] = b[i-1,j+1]-b[i,j], b[i,j+1]-b[i,j], b[i+1,j+1]-b[i,j]
+              bb[6],bb[7] = b[i+1,j]-b[i,j], b[i+1,j-1]-b[i,j]
+              [dbdx[i,j],dbdr[i,j]] = numpy.linalg.lstsq(A,bb)[0] # solve least square problem
+        dbdxout, dbdrout = numpy.empty([npts_tot]), numpy.empty([npts_tot])
+        for j in range(nsec):
+          for i in range(npts):
+            dbdxout[ind[i,j]] = dbdx[i,j]
+            dbdrout[ind[i,j]] = dbdr[i,j]
+
+            
+        # write cambere surface into a VTK file for verification
+        self._writeVTK(pts, conn, 'camber.vtk', 'surface', [[normals,'Normals'],[blk,'blockage'],[dbdxout,'dbdx'],[dbdrout,'dbdr']])
+
+        
         # Revolve 2D grid to form a volume grid
         T = math.pi*2*numpy.linspace(0,1,ntan+1)
         Xvol,Yvol,Zvol = numpy.empty([npts,nsec,ntan]), numpy.empty([npts,nsec,ntan]),\

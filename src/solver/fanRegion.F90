@@ -7,7 +7,7 @@ module fanRegion
 
 contains
   subroutine addFanRegion(pts, conn, donorData, omega, B, famName, famID, &
-      relaxStart, relaxEnd, nPts, nConn)
+      turning_sw, blockage_sw, loss_sw, relaxStart, relaxEnd, nPts, nConn)
 
     use communication, only : myID, adflow_comm_world
     use constants
@@ -27,6 +27,7 @@ contains
     integer(kind=intType), intent(in) :: nPts, nConn, famID
     real(kind=realType), intent(in) :: omega, B, relaxStart, relaxEnd
     character(len=*) :: famName
+    logical, intent(in) :: turning_sw, blockage_sw, loss_sw
 
     ! Working variables
     integer(kind=intType) :: i, j, k, nn, iDim, cellID, intInfo(3), sps, level, nData, ierr, iii
@@ -53,6 +54,9 @@ contains
     region%B = B
     region%relaxStart = relaxStart
     region%relaxEnd = relaxEnd
+    region%flowTurning = turning_sw
+    region%flowBlockage = blockage_sw
+    region%loss = loss_sw
 
     allocate(region%blkPtr(0:nDom))
     region%blkPtr(0) = 0

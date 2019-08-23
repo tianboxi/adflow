@@ -8,6 +8,11 @@ module fanRegionData
      ! The block indexes of the cells included in this region
      integer(kind=intType), dimension(:, :), pointer :: cellIDs
 
+     ! Switches for three main conponents of the model
+     logical :: flowTurning
+     logical :: flowBlockage
+     logical :: loss
+
      ! The total number of cells included this proc has
      integer(kind=intType) :: nCellIDs
 
