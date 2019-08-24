@@ -453,7 +453,7 @@ python module libadflow
          subroutine addfanregion(pts,conn,data,omega,b,famname,famid,turning,blockage,loss,relaxstart,relaxend,npts,nconn) ! in :test:fanRegion.F90:fanregion
             real(kind=realtype), dimension(3, npts), intent(in), target :: pts
             integer(kind=inttype), dimension(8, nconn), intent(in), target :: conn
-            real(kind=realtype), dimension(4, npts), intent(in), target :: data 
+            real(kind=realtype), dimension(5, npts), intent(in), target :: data 
             integer(kind=inttype), intent(in) :: npts, nconn, famid
             real(kind=realtype),intent(in) :: omega, b, relaxstart, relaxend
             character*(*) :: famname

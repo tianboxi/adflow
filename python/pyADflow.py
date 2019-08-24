@@ -5455,17 +5455,18 @@ class ADFLOW(AeroSolver):
             dbdxout[ind[i,j]] = dbdx[i,j]
             dbdrout[ind[i,j]] = dbdr[i,j]
 
-            
         # write cambere surface into a VTK file for verification
         self._writeVTK(pts, conn, 'camber.vtk', 'surface', [[normals,'Normals'],[blk,'blockage'],[dbdxout,'dbdx'],[dbdrout,'dbdr']])
-
+        dbdx,dbdr = dbdx/b, dbdr/b
         
         # Revolve 2D grid to form a volume grid
         T = math.pi*2*numpy.linspace(0,1,ntan+1)
         Xvol,Yvol,Zvol = numpy.empty([npts,nsec,ntan]), numpy.empty([npts,nsec,ntan]),\
                      numpy.empty([npts,nsec,ntan])
         volnormals = numpy.empty([npts,nsec,ntan,3])
-        volb = numpy.empty([npts,nsec,ntan])
+        volb = numpy.empty([npts,nsec,ntan]) # blockage
+        voldbdx = numpy.empty([npts,nsec,ntan]) # blockage gradient
+        voldbdr = numpy.empty([npts,nsec,ntan]) # blockage gradient
         for k in range(ntan):
           for j in range(nsec):
             for i in range(npts):
@@ -5477,12 +5478,13 @@ class ADFLOW(AeroSolver):
               volnormals[i,j,k,2] = normals[1,ind[i,j]]*numpy.sin(T[k])+normals[2,ind[i,j]]*numpy.cos(T[k])
               volnormals[i,j,k,0] = normals[0,ind[i,j]]
               volb[i,j,k] = b[i,j]
+              voldbdx[i,j,k] = dbdx[i,j]
         # create point and index array
         npts_tot = ntan*nsec*npts
         volpts, ind = numpy.empty([3, npts_tot]), numpy.empty([npts, nsec, ntan], dtype=int)
         normalout = numpy.empty([3, npts_tot])
         blkout = numpy.empty([npts_tot])
-        dataout = numpy.empty([4, npts_tot])
+        dataout = numpy.empty([5, npts_tot])
         count = 0
         for k in range(ntan):
           for j in range(nsec):
@@ -5494,7 +5496,8 @@ class ADFLOW(AeroSolver):
               blkout[count] = volb[i,j,k]
               for iDim in range(3):
                  dataout[iDim, count] = volnormals[i,j,k,iDim]
-              dataout[-1, count] = volb[i,j,k] 
+              dataout[-2, count] = volb[i,j,k] 
+              dataout[-1, count] = voldbdx[i,j,k]
               ind[i,j,k] = count
               count = count + 1
         # create connectivity

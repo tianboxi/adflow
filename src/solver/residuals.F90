@@ -387,7 +387,7 @@ contains
     ! block pointers are already set.
     use constants
     use fanRegionData
-    use blockPointers, only : volRef, dw, w, x
+    use blockPointers, only : volRef, dw, w, x ,p
     use flowVarRefState, only : Pref, uRef
     use communication
     use iteration, only : ordersConverged
@@ -510,6 +510,8 @@ contains
           if (res) then
              ! Momentum residuals
              dw(i, j, k, imx:imz) = dw(i, j, k, imx:imz) - Ftmp
+             dw(i, j, k, imx) = dw(i, j, k, imx) - p(i, j, k)* &
+                       fanRegions(iRegion)%dbdx(ii)*volRef(i,j,k)/pRef
 
              ! energy residuals
              dw(i, j, k, iRhoE) = dw(i, j, k, iRhoE)  - &
@@ -525,6 +527,18 @@ contains
              fanRegions(iRegion)%F(iDim, ii) = zero
           end do 
        end do 
+    end if 
+    if (fanRegions(iRegion)%flowBlockage) then
+       do ii=iStart, iEnd
+          ! Extract the cell ID.
+          i = fanRegions(iRegion)%cellIDs(1, ii)
+          j = fanRegions(iRegion)%cellIDs(2, ii)
+          k = fanRegions(iRegion)%cellIDs(3, ii)
+          if (res) then
+             dw(i, j, k, imx) = dw(i, j, k, imx) - p(i, j, k)* &
+                       fanRegions(iRegion)%dbdx(ii)*volRef(i,j,k)/pRef
+          end if 
+       end do
     end if 
 
   end subroutine fanSourceTerms_block

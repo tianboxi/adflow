@@ -23,7 +23,7 @@ contains
     ! Input variables
     real(kind=realType), dimension(3, nPts), intent(in), target :: pts
     integer(kind=intType), dimension(8, nConn), intent(in), target :: conn
-    real(kind=realType), dimension(4, nPts), intent(in), target :: donorData 
+    real(kind=realType), dimension(5, nPts), intent(in), target :: donorData 
     integer(kind=intType), intent(in) :: nPts, nConn, famID
     real(kind=realType), intent(in) :: omega, B, relaxStart, relaxEnd
     character(len=*) :: famName
@@ -42,7 +42,7 @@ contains
     ! ADT Type required data
     integer(kind=intType), dimension(:), pointer :: frontLeaves, frontLeavesNew
     integer(kind=intType), dimension(:), pointer :: BB
-    real(kind=realType) :: coor(3), uvw(7)
+    real(kind=realType) :: coor(3), uvw(8)
 
     nFanRegions = nFanRegions + 1
     
@@ -69,6 +69,7 @@ contains
     allocate(region%cellIDs(3, nCellsLocal(1)))
     allocate(region%normals(3, nCellsLocal(1)))
     allocate(region%blockage(nCellsLocal(1)))
+    allocate(region%dbdx(nCellsLocal(1)))
 
     ! Build the ADT tree.
     call buildSerialHex(nConn, nPts, pts, conn, ADT)
@@ -77,7 +78,7 @@ contains
     sps = 1
     level = 1
     ! Three components of normal vector and the blockage factor need to be interpolated
-    nData = 4 
+    nData = 5 
     failed = .True.
     ! Loop for searching
     do nn=1, nDom
@@ -106,6 +107,7 @@ contains
                       region%cellIDs(:, region%nCellIDs) = (/i, j, k/)
                       region%normals(:, region%nCellIDs) = uvw(4:6)
                       region%blockage(region%nCellIDs) = uvw(7)
+                      region%dbdx(region%nCellIDs) = uvw(8)
                    end if 
                 end if
              end do
@@ -129,7 +131,10 @@ contains
     allocate(region%blockage(region%nCellIDs))
     region%blockage = tmp2(1:region%nCellIDs)
     deallocate(tmp2)
-
+    tmp2 => region%dbdx
+    allocate(region%dbdx(region%nCellIDs))
+    region%dbdx = tmp2(1:region%nCellIDs)
+    deallocate(tmp2)
     allocate(region%F(3, region%nCellIDs))
     allocate(region%W(3, region%nCellIDs))
     allocate(region%Wt(3, region%nCellIDs))

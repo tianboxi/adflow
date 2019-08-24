@@ -28,6 +28,9 @@ module fanRegionData
      ! blokage factor
      real(kind=realType), dimension(:), pointer :: blockage 
 
+     ! axial gradient of blockage factor
+     real(kind=realType), dimension(:), pointer :: dbdx
+
      ! F is the cell bodyforce
      real(kind=realType), dimension(:,:), pointer :: F
 
