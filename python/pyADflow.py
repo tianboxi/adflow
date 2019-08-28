@@ -5465,8 +5465,9 @@ class ADFLOW(AeroSolver):
                      numpy.empty([npts,nsec,ntan])
         volnormals = numpy.empty([npts,nsec,ntan,3])
         volb = numpy.empty([npts,nsec,ntan]) # blockage
-        voldbdx = numpy.empty([npts,nsec,ntan]) # blockage gradient
-        voldbdr = numpy.empty([npts,nsec,ntan]) # blockage gradient
+        voldbdx = numpy.empty([npts,nsec,ntan]) # blockage gradient in cartesian
+        voldbdy = numpy.empty([npts,nsec,ntan]) 
+        voldbdz = numpy.empty([npts,nsec,ntan])
         for k in range(ntan):
           for j in range(nsec):
             for i in range(npts):
@@ -5479,6 +5480,8 @@ class ADFLOW(AeroSolver):
               volnormals[i,j,k,0] = normals[0,ind[i,j]]
               volb[i,j,k] = b[i,j]
               voldbdx[i,j,k] = dbdx[i,j]
+              voldbdy[i,j,k] = dbdr[i,j]*numpy.cos(T[k])
+              voldbdz[i,j,k] = dbdr[i,j]*numpy.sin(T[k])
         # create point and index array
         npts_tot = ntan*nsec*npts
         volpts, ind = numpy.empty([3, npts_tot]), numpy.empty([npts, nsec, ntan], dtype=int)
